@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""
-Компонент для отображения результатов и ошибок
-Лабораторные работы 2-3
-"""
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTabWidget, QTextEdit, 
