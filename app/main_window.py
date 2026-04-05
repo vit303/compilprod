@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""
-Главное окно приложения текстового редактора
-"""
-
 import os
 import sys
 from PyQt6.QtWidgets import (
@@ -18,6 +12,7 @@ from PyQt6.QtGui import QAction, QFont, QKeySequence
 from app.editor_tab import EditorTab
 from app.output_tab import OutputTab
 from app.search_module import SearchModule
+from app.automaton_parser import AutomatonParserWidget
 from app.dialogs import AboutDialog
 
 
@@ -28,6 +23,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.current_file = None
         self.search_module = None
+        self.automaton_parser = None
         self.output_tab = None
         self.setup_ui()
         self.setup_menu()
@@ -37,7 +33,7 @@ class MainWindow(QMainWindow):
     
     def setup_ui(self):
         """Настройка основного интерфейса"""
-        self.setWindowTitle("Текстовый редактор с поиском по регулярным выражениям")
+        self.setWindowTitle("Текстовый редактор с поиском по регулярным выражениям и автоматным парсером")
         self.setGeometry(100, 100, 1400, 800)
         
         # Создаём центральный виджет
@@ -69,21 +65,22 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Создаём вертикальный сплиттер для правой панели (поиск сверху, результаты снизу)
-        right_splitter = QSplitter(Qt.Orientation.Vertical)
+        # Создаём вкладки для правой панели
+        self.right_tab_widget = QTabWidget()
         
-        # Модуль поиска (сверху)
+        # Вкладка 1: Поиск по регулярным выражениям
         self.search_module = SearchModule(self.get_current_editor())
-        right_splitter.addWidget(self.search_module)
+        self.right_tab_widget.addTab(self.search_module, "🔍 Регулярные выражения")
         
-        # Вкладка результатов (снизу)
+        # Вкладка 2: Автоматный парсер имён
+        self.automaton_parser = AutomatonParserWidget(self.get_current_editor())
+        self.right_tab_widget.addTab(self.automaton_parser, "🤖 Автоматный парсер")
+        
+        # Вкладка 3: Результаты анализа
         self.output_tab = OutputTab()
-        right_splitter.addWidget(self.output_tab)
+        self.right_tab_widget.addTab(self.output_tab, "📊 Результаты")
         
-        # Устанавливаем пропорции для правого сплиттера (40% поиск, 60% результаты)
-        right_splitter.setSizes([400, 600])
-        
-        right_layout.addWidget(right_splitter)
+        right_layout.addWidget(self.right_tab_widget)
         
         # Добавляем панели в основной сплиттер
         self.main_splitter.addWidget(left_widget)
@@ -96,6 +93,7 @@ class MainWindow(QMainWindow):
         
         # Подключаем сигналы поиска для обновления вкладки результатов
         self.search_module.matches_found.connect(self.on_search_complete)
+        self.automaton_parser.matches_found.connect(self.on_automaton_complete)
     
     def setup_menu(self):
         """Настройка главного меню"""
@@ -164,10 +162,17 @@ class MainWindow(QMainWindow):
         # Меню Поиск
         search_menu = menubar.addMenu("Поиск")
         
-        find_action = QAction("Найти", self)
+        find_action = QAction("Найти (Regex)", self)
         find_action.setShortcut("Ctrl+F")
         find_action.triggered.connect(self.focus_search)
         search_menu.addAction(find_action)
+        
+        automaton_action = QAction("Распознать имена (Автомат)", self)
+        automaton_action.setShortcut("Ctrl+G")
+        automaton_action.triggered.connect(self.run_automaton_parser)
+        search_menu.addAction(automaton_action)
+        
+        search_menu.addSeparator()
         
         clear_action = QAction("Очистить результаты", self)
         clear_action.setShortcut("Ctrl+Shift+F")
@@ -183,13 +188,19 @@ class MainWindow(QMainWindow):
         license_example.triggered.connect(self.insert_license_example)
         examples_menu.addAction(license_example)
         
-        name_example = QAction("Вставить пример ФИО", self)
+        name_example = QAction("Вставить пример ФИО (Regex)", self)
         name_example.triggered.connect(self.insert_name_example)
         examples_menu.addAction(name_example)
         
         element_example = QAction("Вставить пример элементов", self)
         element_example.triggered.connect(self.insert_element_example)
         examples_menu.addAction(element_example)
+        
+        examples_menu.addSeparator()
+        
+        automaton_example = QAction("Вставить пример для автомата", self)
+        automaton_example.triggered.connect(self.insert_automaton_example)
+        examples_menu.addAction(automaton_example)
         
         # Меню Справка
         help_menu = menubar.addMenu("Справка")
@@ -243,9 +254,13 @@ class MainWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        find_action = QAction("🔍 Найти", self)
+        find_action = QAction("🔍 Найти (Regex)", self)
         find_action.triggered.connect(self.focus_search)
         toolbar.addAction(find_action)
+        
+        automaton_action = QAction("🤖 Распознать имена", self)
+        automaton_action.triggered.connect(self.run_automaton_parser)
+        toolbar.addAction(automaton_action)
         
         clear_action = QAction("🗑 Очистить", self)
         clear_action.triggered.connect(self.clear_search_results)
@@ -426,6 +441,37 @@ class MainWindow(QMainWindow):
                 height: 1px;
                 margin: 2px;
             }
+            QTextEdit {
+                background-color: #2d2d2d;
+                color: #e8e8e8;
+                border: 1px solid #404040;
+            }
+            QScrollBar:vertical {
+                background-color: #2d2d2d;
+                width: 12px;
+                border: none;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #555;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #777;
+            }
+            QScrollBar:horizontal {
+                background-color: #2d2d2d;
+                height: 12px;
+                border: none;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #555;
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #777;
+            }
         """)
     
     def add_new_tab(self, text=""):
@@ -440,9 +486,8 @@ class MainWindow(QMainWindow):
         index = self.tab_widget.addTab(editor, f"Новый документ {self.tab_widget.count() + 1}")
         self.tab_widget.setCurrentIndex(index)
         
-        # Обновляем модуль поиска
-        if self.search_module:
-            self.search_module.set_editor(editor)
+        # Обновляем модули поиска
+        self.update_search_modules_editor()
         
         return editor
     
@@ -451,6 +496,14 @@ class MainWindow(QMainWindow):
         if self.tab_widget and self.tab_widget.currentWidget():
             return self.tab_widget.currentWidget()
         return None
+    
+    def update_search_modules_editor(self):
+        """Обновляет редактор во всех модулях поиска"""
+        editor = self.get_current_editor()
+        if self.search_module:
+            self.search_module.set_editor(editor)
+        if self.automaton_parser:
+            self.automaton_parser.set_editor(editor)
     
     def close_tab(self, index):
         """Закрывает вкладку"""
@@ -461,6 +514,9 @@ class MainWindow(QMainWindow):
             editor = self.get_current_editor()
             if editor:
                 editor.clear()
+        
+        # Обновляем модули поиска
+        self.update_search_modules_editor()
     
     def new_file(self):
         """Создаёт новый файл"""
@@ -527,27 +583,44 @@ class MainWindow(QMainWindow):
     def focus_search(self):
         """Фокусирует поле поиска"""
         if self.search_module:
+            self.right_tab_widget.setCurrentIndex(0)  # Переключаемся на вкладку Regex
             self.search_module.search_type.setFocus()
+    
+    def run_automaton_parser(self):
+        """Запускает автоматный парсер"""
+        if self.automaton_parser:
+            self.right_tab_widget.setCurrentIndex(1)  # Переключаемся на вкладку автомата
+            self.automaton_parser.parse_names()
     
     def clear_search_results(self):
         """Очищает результаты поиска"""
         if self.search_module:
             self.search_module.clear_results()
+        if self.automaton_parser:
+            self.automaton_parser.clear_results()
         if self.output_tab:
             self.output_tab.clear_results()
             self.output_tab.clear_errors()
     
     def on_search_complete(self, matches_count):
-        """Обработчик завершения поиска"""
+        """Обработчик завершения поиска по регулярным выражениям"""
         if self.output_tab:
-            self.output_tab.add_result(f"Поиск завершён. Найдено совпадений: {matches_count}")
+            self.output_tab.add_result(f"[Regex] Поиск завершён. Найдено совпадений: {matches_count}")
             if matches_count > 0:
-                self.output_tab.set_current_tab(0)  # Переключаемся на вкладку результатов
+                self.output_tab.set_current_tab(0)
+    
+    def on_automaton_complete(self, matches_count):
+        """Обработчик завершения автоматного парсера"""
+        if self.output_tab:
+            self.output_tab.add_result(f"[Автомат] Распознавание завершено. Найдено ФИО: {matches_count}")
+            if matches_count > 0:
+                self.output_tab.set_current_tab(0)
     
     def insert_license_example(self):
         """Вставляет пример для поиска водительских удостоверений"""
         example = """Примеры номеров водительских удостоверений РФ:
 
+✅ Корректные (должны находиться):
 ВА123456
 СА 789012
 МР456789
@@ -555,7 +628,7 @@ class MainWindow(QMainWindow):
 ТС987654
 АА 000000
 
-Некорректные примеры (не должны находиться):
+❌ Некорректные (не должны находиться):
 АБ123456 (недопустимые буквы)
 ВА12345 (5 цифр)
 ВА1234567 (7 цифр)
@@ -563,16 +636,17 @@ class MainWindow(QMainWindow):
         self.get_current_editor().insertPlainText(example)
     
     def insert_name_example(self):
-        """Вставляет пример для поиска ФИО на английском"""
-        example = """Примеры ФИО на английском языке:
+        """Вставляет пример для поиска ФИО на английском (Regex)"""
+        example = """Примеры ФИО на английском языке (для Regex):
 
+✅ Корректные (должны находиться):
 Ivanov Ivan Ivanovich
 Petrova Maria Sergeevna
 Smith John Robert
 Johnson Emily Kate
 Williams Michael David
 
-Некорректные примеры:
+❌ Некорректные (не должны находиться):
 ivanov ivan (строчные буквы)
 Ivanov Ivan (только 2 слова)
 IVANOV IVAN IVANOVICH (все заглавные)
@@ -581,8 +655,9 @@ IVANOV IVAN IVANOVICH (все заглавные)
     
     def insert_element_example(self):
         """Вставляет пример для поиска химических элементов"""
-        example = """Примеры химических элементов:
+        example = """Примеры химических элементов (таблица Менделеева):
 
+✅ Корректные (должны находиться):
 Hydrogen and Oxygen combine to make Water.
 Carbon is the basis of organic chemistry.
 Gold (Au) is a precious metal.
@@ -590,10 +665,37 @@ Uranium is used in nuclear reactors.
 Helium is a noble gas.
 Iron and Copper are transition metals.
 
-Некорректные примеры:
+❌ Некорректные (не должны находиться):
 Water (не элемент)
 Air (не элемент)
 Hydro (неполное название)
+"""
+        self.get_current_editor().insertPlainText(example)
+    
+    def insert_automaton_example(self):
+        """Вставляет пример для автоматного парсера имён"""
+        example = """Примеры для автоматного парсера имён (конечный автомат):
+
+✅ Корректные ФИО (должны распознаваться):
+Ivanov Ivan Ivanovich
+Petrova Maria Sergeevna
+Smith John Robert
+Johnson Emily Kate
+Williams Michael David
+Brown Sarah Elizabeth
+Jones James William
+Garcia Patricia Ann
+
+❌ Некорректные ФИО (не должны распознаваться):
+ivanov ivan ivanovich (все строчные)
+IVANOV IVAN IVANOVICH (все заглавные)
+Ivanov Ivan (только 2 слова)
+Ivanov I Ivanovich (инициал вместо имени)
+Ivanov  Ivan  Ivanovich (двойные пробелы)
+IvanovIvanIvanovich (без пробелов)
+
+📊 Автомат распознаёт только имена в формате:
+Заглавная буква + строчные + пробел + Заглавная + строчные + пробел + Заглавная + строчные
 """
         self.get_current_editor().insertPlainText(example)
     
