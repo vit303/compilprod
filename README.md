@@ -115,6 +115,6 @@ F:
 ![Примеры](img/6lab2.png)
 
 ## Тестовые примеры 
-![Примеры](screenshot/ex1.png)
-![Примеры](screenshot/ex2.png)
-![Примеры](screenshot/ex3.png)
+![Примеры](img/ex1.png)
+![Примеры](img/ex2.png)
+![Примеры](img/ex3.png)
