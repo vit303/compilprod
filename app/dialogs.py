@@ -23,7 +23,7 @@ class AboutDialog(QDialog):
         # Информация
         info_text = QTextBrowser()
         info_text.setHtml("""
-        <h3 style="color: #e8e8e8;">Лабораторные работы 1-4</h3>
+        <h3 style="color: #e8e8e8;">Лабораторные работы</h3>
         <p style="color: #e8e8e8;"><b>Версия:</b> 1.0.0</p>
         <p style="color: #e8e8e8;"><b>Разработчик:</b> Студент</p>
         <p style="color: #e8e8e8;"><b>Описание:</b></p>
@@ -32,6 +32,7 @@ class AboutDialog(QDialog):
             <li>ЛР2: Лексический анализатор</li>
             <li>ЛР3: Синтаксический анализатор</li>
             <li>ЛР4: Поиск по регулярным выражениям</li>
+            <li>ЛР6: Внутренняя форма (тетрады) и ПОЛИЗ для арифметических выражений</li>
         </ul>
         
         <h3 style="color: #e8e8e8;">Регулярные выражения (ЛР4)</h3>

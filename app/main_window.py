@@ -13,6 +13,7 @@ from app.editor_tab import EditorTab
 from app.output_tab import OutputTab
 from app.search_module import SearchModule
 from app.automaton_parser import AutomatonParserWidget
+from app.expr_widget import ExprAnalyzerWidget
 from app.dialogs import AboutDialog
 
 
@@ -24,6 +25,7 @@ class MainWindow(QMainWindow):
         self.current_file = None
         self.search_module = None
         self.automaton_parser = None
+        self.expr_analyzer = None
         self.output_tab = None
         self.setup_ui()
         self.setup_menu()
@@ -76,6 +78,10 @@ class MainWindow(QMainWindow):
         self.automaton_parser = AutomatonParserWidget(self.get_current_editor())
         self.right_tab_widget.addTab(self.automaton_parser, "🤖 Автоматный парсер")
         
+        # Вкладка 3: ЛР6 — лексер/парсер/тетрады/ПОЛИЗ
+        self.expr_analyzer = ExprAnalyzerWidget(self.get_current_editor())
+        self.right_tab_widget.addTab(self.expr_analyzer, "🧮 ЛР6: выражения")
+
         # Вкладка 3: Результаты анализа
         self.output_tab = OutputTab()
         self.right_tab_widget.addTab(self.output_tab, "📊 Результаты")
@@ -94,6 +100,7 @@ class MainWindow(QMainWindow):
         # Подключаем сигналы поиска для обновления вкладки результатов
         self.search_module.matches_found.connect(self.on_search_complete)
         self.automaton_parser.matches_found.connect(self.on_automaton_complete)
+        self.expr_analyzer.analysis_performed.connect(self.on_expr_analysis_complete)
     
     def setup_menu(self):
         """Настройка главного меню"""
@@ -504,6 +511,8 @@ class MainWindow(QMainWindow):
             self.search_module.set_editor(editor)
         if self.automaton_parser:
             self.automaton_parser.set_editor(editor)
+        if self.expr_analyzer:
+            self.expr_analyzer.set_editor(editor)
     
     def close_tab(self, index):
         """Закрывает вкладку"""
@@ -615,6 +624,52 @@ class MainWindow(QMainWindow):
             self.output_tab.add_result(f"[Автомат] Распознавание завершено. Найдено ФИО: {matches_count}")
             if matches_count > 0:
                 self.output_tab.set_current_tab(0)
+
+    def on_expr_analysis_complete(self, payload):
+        """Обработчик завершения анализа арифметического выражения (ЛР6)"""
+        if not self.output_tab:
+            return
+
+        # Очистим вкладку "Ошибки", но не трогаем пользовательский текстовый лог полностью
+        self.output_tab.clear_errors()
+
+        source = payload.get("source", "")
+        lex_errors = payload.get("lex_errors", []) or []
+        syn_errors = payload.get("syn_errors", []) or []
+        sem_errors = payload.get("sem_errors", []) or []
+        quads = payload.get("quads", []) or []
+        rpn = payload.get("rpn", None)
+        rpn_value = payload.get("rpn_value", None)
+
+        self.output_tab.add_result("[ЛР6] Анализ выражения")
+        self.output_tab.add_result(f"[ЛР6] Вход: {source.strip()}")
+
+        for e in list(lex_errors) + list(syn_errors) + list(sem_errors):
+            self.output_tab.add_error(e.line, e.col, f"[{e.kind}] {e.message}")
+
+        if lex_errors or syn_errors:
+            self.output_tab.add_result(
+                f"[ЛР6] Ошибки: lex={len(lex_errors)}, syn={len(syn_errors)}. Тетрады/ПОЛИЗ не построены."
+            )
+            self.output_tab.set_current_tab(1)
+            return
+
+        self.output_tab.add_result(f"[ЛР6] Тетрад: {len(quads)}")
+        if quads:
+            self.output_tab.add_result("[ЛР6] Тетрады (op, result, arg1, arg2):")
+            for q in quads:
+                self.output_tab.add_result(f"  ({q.op}, {q.result}, {q.arg1}, {q.arg2})")
+
+        if rpn is None:
+            self.output_tab.add_result("[ЛР6] ПОЛИЗ: не построен (только для целочисленных выражений без id).")
+        else:
+            self.output_tab.add_result("[ЛР6] ПОЛИЗ: " + " ".join(rpn))
+            if rpn_value is None:
+                self.output_tab.add_result("[ЛР6] Значение: не вычислено (ошибка).")
+            else:
+                self.output_tab.add_result(f"[ЛР6] Значение: {rpn_value}")
+
+        self.output_tab.set_current_tab(0)
     
     def insert_license_example(self):
         """Вставляет пример для поиска водительских удостоверений"""
